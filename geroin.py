@@ -33,10 +33,24 @@ interp_func = interp1d(x_data, y_data, kind='linear')
 # Запуск замера времени
 start_time = time.time()
 
+# Буфер для хранения данных перед вставкой
+batch_size = 1000
+batch_data = []
+
 # Выполнение расчетов и запись в базу данных
 for x in np.arange(0, 40.01, 0.01):
     y = interp_func(x).item()  # Преобразование numpy.ndarray в float
-    cursor.execute("INSERT INTO interpolation_results (x_value, y_value) VALUES (%s, %s)", (float(x), float(y)))
+    batch_data.append((float(x), float(y)))
+
+    # Периодическая вставка данных в базу (каждые batch_size записей)
+    if len(batch_data) >= batch_size:
+        cursor.executemany("INSERT INTO interpolation_results (x_value, y_value) VALUES (%s, %s)", batch_data)
+        conn.commit()  # Выполняем commit после каждой партии данных
+        batch_data = []  # Очистка буфера
+
+# Записываем оставшиеся данные, если есть
+if batch_data:
+    cursor.executemany("INSERT INTO interpolation_results (x_value, y_value) VALUES (%s, %s)", batch_data)
     conn.commit()
 
 # Замер времени выполнения

@@ -103,7 +103,7 @@ BEGIN
         FOR _ IN 1..100 LOOP
             temp := -58 + RANDOM() * 116;  -- (-58 до 58)
             pres := 500 + RANDOM() * 400;  -- (500 до 900)
-            wind_dir := FLOOR(RANDOM() * 60);
+            wind_dir := FLOOR(RANDOM() * 60);  -- от 0 до 59
 
             BEGIN
                 INSERT INTO measurements (employee_id, temperature, pressure, wind_direction)
