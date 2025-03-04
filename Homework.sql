@@ -14,6 +14,7 @@ BEGIN;
     DROP TABLE IF EXISTS public.calc_temperatures_correction;
     DROP TABLE IF EXISTS public.constants;
     DROP TABLE IF EXISTS public.temperature_deviations;
+    DROP TABLE IF EXISTS public.wind_corrections;
 
     DROP SEQUENCE IF EXISTS public.measurment_input_params_seq;
     DROP SEQUENCE IF EXISTS public.measurment_baths_seq;
@@ -31,7 +32,6 @@ COMMIT;
 BEGIN;
     RAISE NOTICE ;
 
-    -- Тип для интерполяции
     CREATE TYPE public.interpolation_type AS (
         x0 NUMERIC(8,2),
         x1 NUMERIC(8,2),
@@ -39,7 +39,6 @@ BEGIN;
         y1 NUMERIC(8,2)
     );
 
-    -- Тип для входных параметров
     CREATE TYPE public.input_params AS (
         height NUMERIC(8,2),
         temperature NUMERIC(8,2),
@@ -58,10 +57,6 @@ BEGIN;
     RAISE NOTICE ;
 COMMIT;
 
--- 3. СОЗДАНИЕ ТАБЛИЦ И ПОСЛЕДОВАТЕЛЬНОСТЕЙ
--- ======================================================================
-
--- 3.1 Справочник воинских званий
 BEGIN;
     RAISE NOTICE ;
 
@@ -73,14 +68,12 @@ BEGIN;
     CREATE SEQUENCE public.military_ranks_seq START 3;
     ALTER TABLE public.military_ranks ALTER COLUMN id SET DEFAULT nextval('public.military_ranks_seq');
 
-    -- Наполнение начальными данными
     INSERT INTO public.military_ranks(id, description)
     VALUES (1, 'Рядовой'), (2, 'Лейтенант');
 
     RAISE NOTICE ;
 COMMIT;
 
--- 3.2 Таблица сотрудников
 BEGIN;
     RAISE NOTICE ;
 
@@ -94,14 +87,12 @@ BEGIN;
     CREATE SEQUENCE public.employees_seq START 2;
     ALTER TABLE public.employees ALTER COLUMN id SET DEFAULT nextval('public.employees_seq');
 
-    -- Наполнение начальными данными
     INSERT INTO public.employees(id, name, birthday, military_rank_id)
     VALUES (1, 'Воловиков Александр Сергеевич', '1978-06-24', 2);
 
     RAISE NOTICE 'Таблица employees создана успешно';
 COMMIT;
 
--- 3.3 Таблица типов измерительных устройств
 BEGIN;
     RAISE NOTICE 'Создание таблицы типов измерительных устройств...';
 
@@ -114,7 +105,6 @@ BEGIN;
     CREATE SEQUENCE public.measurment_types_seq START 3;
     ALTER TABLE public.measurment_types ALTER COLUMN id SET DEFAULT nextval('public.measurment_types_seq');
 
-    -- Наполнение начальными данными
     INSERT INTO public.measurment_types(id, short_name, description)
     VALUES (1, 'ДМК', 'Десантный метео комплекс'),
            (2, 'ВР', 'Ветровое ружье');
@@ -122,7 +112,6 @@ BEGIN;
     RAISE NOTICE 'Таблица measurment_types создана успешно';
 COMMIT;
 
--- 3.4 Таблица параметров измерений
 BEGIN;
     RAISE NOTICE 'Создание таблицы параметров измерений...';
 
@@ -140,14 +129,12 @@ BEGIN;
     CREATE SEQUENCE public.measurment_input_params_seq START 2;
     ALTER TABLE public.measurment_input_params ALTER COLUMN id SET DEFAULT nextval('public.measurment_input_params_seq');
 
-    -- Наполнение начальными данными
     INSERT INTO public.measurment_input_params(id, measurment_type_id, height, temperature, pressure, wind_direction, wind_speed)
     VALUES (1, 1, 100, 12, 34, 0.2, 45);
 
     RAISE NOTICE 'Таблица measurment_input_params создана успешно';
 COMMIT;
 
--- 3.5 Таблица истории измерений
 BEGIN;
     RAISE NOTICE 'Создание таблицы истории измерений...';
 
@@ -161,14 +148,12 @@ BEGIN;
     CREATE SEQUENCE public.measurment_baths_seq START 2;
     ALTER TABLE public.measurment_baths ALTER COLUMN id SET DEFAULT nextval('public.measurment_baths_seq');
 
-    -- Наполнение начальными данными
     INSERT INTO public.measurment_baths(id, emploee_id, measurment_input_param_id)
     VALUES (1, 1, 1);
 
     RAISE NOTICE 'Таблица measurment_baths создана успешно';
 COMMIT;
 
--- 3.6 Таблица настроек измерений
 BEGIN;
     RAISE NOTICE 'Создание таблицы настроек измерений...';
 
@@ -178,7 +163,6 @@ BEGIN;
         description TEXT
     );
 
-    -- Наполнение начальными данными
     INSERT INTO public.measurment_settings(key, value, description)
     VALUES ('min_temperature', '-58', 'Минимальное значение температуры'),
            ('max_temperature', '58', 'Максимальное значение температуры'),
@@ -198,7 +182,6 @@ BEGIN;
     RAISE NOTICE 'Таблица measurment_settings создана успешно';
 COMMIT;
 
--- 3.7 Таблица поправок температур
 BEGIN;
     RAISE NOTICE 'Создание таблицы температурных поправок...';
 
@@ -207,7 +190,6 @@ BEGIN;
         correction NUMERIC(8,2)
     );
 
-    -- Наполнение начальными данными
     INSERT INTO public.calc_temperatures_correction(temperature, correction)
     VALUES (0, 0.5), (5, 0.5), (10, 1), (20, 1), (25, 2), (30, 3.5), (40, 4.5);
 
@@ -223,11 +205,9 @@ BEGIN;
         value TEXT NOT NULL
     );
 
-    -- Создание индекса для быстрого доступа
     CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_key
         ON public.constants USING btree (key ASC NULLS LAST);
 
-    -- Наполнение начальными данными
     INSERT INTO public.constants(key, value)
     VALUES ('const_pressure', '750'), ('const_temperature', '15.9');
 
@@ -269,25 +249,46 @@ BEGIN;
     RAISE NOTICE 'Таблица temperature_deviations создана успешно';
 COMMIT;
 
--- 4. СОЗДАНИЕ ВНЕШНИХ КЛЮЧЕЙ
--- ======================================================================
+BEGIN;
+    RAISE NOTICE 'Создание таблицы корректировок для расчета среднего ветра...';
+
+    CREATE TABLE public.wind_corrections (
+        height INTEGER PRIMARY KEY,
+        correction_0_5 NUMERIC(8,2),
+        correction_6_10 NUMERIC(8,2),
+        correction_11_15 NUMERIC(8,2),
+        correction_16_20 NUMERIC(8,2),
+        correction_21_25 NUMERIC(8,2)
+    );
+
+    INSERT INTO public.wind_corrections (height, correction_0_5, correction_6_10, correction_11_15, correction_16_20, correction_21_25)
+    VALUES
+        (200, 1.0, 1.5, 2.0, 2.5, 3.0),
+        (400, 1.2, 1.7, 2.2, 2.7, 3.2),
+        (800, 1.4, 1.9, 2.4, 2.9, 3.4),
+        (1200, 1.6, 2.1, 2.6, 3.1, 3.6),
+        (1600, 1.8, 2.3, 2.8, 3.3, 3.8),
+        (2000, 2.0, 2.5, 3.0, 3.5, 4.0),
+        (2400, 2.2, 2.7, 3.2, 3.7, 4.2),
+        (3000, 2.4, 2.9, 3.4, 3.9, 4.4),
+        (4000, 2.6, 3.1, 3.6, 4.1, 4.6);
+
+    RAISE NOTICE 'Таблица wind_corrections создана успешно';
+COMMIT;
 
 BEGIN;
     RAISE NOTICE 'Создание внешних ключей...';
 
-    -- Связь между сотрудниками и званиями
     ALTER TABLE public.employees
     ADD CONSTRAINT military_rank_id_fk
     FOREIGN KEY (military_rank_id)
     REFERENCES public.military_ranks (id);
 
-    -- Связь между параметрами и типами измерений
     ALTER TABLE public.measurment_input_params
     ADD CONSTRAINT measurment_type_id_fk
     FOREIGN KEY (measurment_type_id)
     REFERENCES public.measurment_types (id);
 
-    -- Связи для таблицы истории измерений
     ALTER TABLE public.measurment_baths
     ADD CONSTRAINT emploee_id_fk
     FOREIGN KEY (emploee_id)
@@ -301,10 +302,6 @@ BEGIN;
     RAISE NOTICE 'Внешние ключи созданы успешно';
 COMMIT;
 
--- 5. СОЗДАНИЕ ФУНКЦИЙ
--- ======================================================================
-
--- 5.1 Функция форматирования даты
 BEGIN;
     RAISE NOTICE 'Создание функции форматирования даты...';
 
@@ -328,7 +325,6 @@ BEGIN;
     RAISE NOTICE 'Функция fn_calc_header_period создана успешно';
 COMMIT;
 
--- 5.2 Функция для получения высоты в форматированном виде
 BEGIN;
     RAISE NOTICE 'Создание функции форматирования высоты...';
 
@@ -341,7 +337,6 @@ BEGIN;
     DECLARE
         var_result TEXT;
     BEGIN
-        -- Проверка на допустимость высоты
         IF par_height < -10000 OR par_height > 10000 THEN
             RAISE EXCEPTION 'Высота % вне допустимого диапазона (-10000..10000 м)', par_height;
         END IF;
@@ -356,7 +351,6 @@ BEGIN;
     RAISE NOTICE 'Функция fn_calc_header_height создана успешно';
 COMMIT;
 
--- 5.3 Функция для проверки параметров измерений
 BEGIN;
     RAISE NOTICE 'Создание функции проверки параметров измерений...';
 
@@ -372,7 +366,6 @@ BEGIN;
         max_val NUMERIC;
         result public.measure_type;
     BEGIN
-        -- Получаем минимальное и максимальное значение для параметра
         EXECUTE format('SELECT value::NUMERIC FROM public.measurment_settings WHERE key = %L',
                       'min_' || LOWER(type_param)) INTO min_val;
         EXECUTE format('SELECT value::NUMERIC FROM public.measurment_settings WHERE key = %L',
@@ -382,17 +375,14 @@ BEGIN;
             RAISE EXCEPTION 'Параметр % не найден в настройках', type_param;
         END IF;
 
-        -- Проверка на null
         IF value_param IS NULL THEN
             RAISE EXCEPTION 'Значение не может быть NULL';
         END IF;
 
-        -- Проверка на диапазон
         IF value_param < min_val OR value_param > max_val THEN
             RETURN NULL;
         END IF;
 
-        -- Возвращаем результат
         result.param := value_param;
         result.ttype := type_param;
         RETURN result;
@@ -404,7 +394,6 @@ BEGIN;
     RAISE NOTICE 'Функция get_measure_setting создана успешно';
 COMMIT;
 
--- 5.4 Функция для интерполяции температурной поправки
 BEGIN;
     RAISE NOTICE 'Создание функции интерполяции температурной поправки...';
 
@@ -423,7 +412,6 @@ BEGIN;
     BEGIN
         RAISE NOTICE 'Расчет интерполяции для температуры %', par_temperature;
 
-        -- Проверяем, возможно температура совпадает со значением в справочнике
         SELECT correction INTO var_result
         FROM public.calc_temperatures_correction
         WHERE temperature = par_temperature;
@@ -432,7 +420,6 @@ BEGIN;
             RETURN var_result;
         END IF;
 
-        -- Получаем диапазон поправок
         SELECT MIN(temperature), MAX(temperature)
         INTO var_min_temparure, var_max_temperature
         FROM public.calc_temperatures_correction;
@@ -442,7 +429,6 @@ BEGIN;
                 par_temperature, var_min_temparure, var_max_temperature;
         END IF;
 
-        -- Получаем граничные значения для интерполяции
         SELECT
             t1.temperature, t1.correction, t2.temperature, t2.correction
         INTO
@@ -462,7 +448,6 @@ BEGIN;
         RAISE NOTICE 'Граничные значения: x0=%, y0=%, x1=%, y1=%',
             var_interpolation.x0, var_interpolation.y0, var_interpolation.x1, var_interpolation.y1;
 
-        -- Расчет интерполяции
         var_denominator := var_interpolation.x1 - var_interpolation.x0;
 
         IF var_denominator = 0 THEN
@@ -482,7 +467,6 @@ BEGIN;
     RAISE NOTICE 'Функция fn_calc_temperature_interpolation создана успешно';
 COMMIT;
 
--- 5.5 Функция расчета отклонения приземной виртуальной температуры
 BEGIN;
     RAISE NOTICE 'Создание функции расчета отклонения приземной виртуальной температуры...';
 
@@ -497,22 +481,18 @@ BEGIN;
         deltaTv NUMERIC(8,2) := 0;
         var_result NUMERIC(8,2) := 0;
     BEGIN
-        -- Проверка допустимости температуры
         IF par_temperature IS NULL THEN
             RAISE EXCEPTION 'Температура не может быть NULL';
         END IF;
 
-        -- Получаем табличное значение температуры
         SELECT COALESCE(value::NUMERIC(8,2), 15.9)
         INTO virtual_temperature
         FROM public.measurment_settings
         WHERE key = 'calc_table_temperature';
 
-        -- Виртуальная поправка
         deltaTv := par_temperature +
             public.fn_calc_temperature_interpolation(par_temperature => par_temperature);
 
-        -- Отклонение приземной виртуальной температуры
         var_result := ROUND(deltaTv - virtual_temperature, 1);
 
         RETURN var_result;
@@ -524,7 +504,6 @@ BEGIN;
     RAISE NOTICE 'Функция fn_calc_header_temperature создана успешно';
 COMMIT;
 
--- 5.6 Функция расчета отклонения наземного давления
 BEGIN;
     RAISE NOTICE 'Создание функции расчета отклонения наземного давления...';
 
@@ -537,7 +516,6 @@ BEGIN;
     DECLARE
         table_pressure NUMERIC(8,2);
     BEGIN
-        -- Проверка допустимости давления
         IF par_pressure IS NULL THEN
             RAISE EXCEPTION 'Давление не может быть NULL';
         END IF;
@@ -546,13 +524,11 @@ BEGIN;
             RAISE EXCEPTION 'Давление % вне допустимого диапазона (500..900 мм рт.ст.)', par_pressure;
         END IF;
 
-        -- Определяем табличное значение давления
         SELECT COALESCE(value::NUMERIC(8,2), 750)
         INTO table_pressure
         FROM public.measurment_settings
         WHERE key = 'calc_table_pressure';
 
-        -- Результат
         RETURN ROUND(par_pressure - table_pressure, 1);
     END;
     $$;
@@ -562,7 +538,6 @@ BEGIN;
     RAISE NOTICE 'Функция fn_calc_header_pressure создана успешно';
 COMMIT;
 
--- 5.7 Функция для форматирования метеопараметров
 BEGIN;
     RAISE NOTICE 'Создание функции форматирования метеопараметров...';
 
@@ -579,30 +554,25 @@ BEGIN;
         pressure_str TEXT;
         temp_str TEXT;
     BEGIN
-        -- Проверка параметров
         IF par_pressure IS NULL OR par_temperature IS NULL THEN
             RAISE EXCEPTION 'Параметры не могут быть NULL';
         END IF;
 
-        -- Расчет отклонений
         pressure_delta := ROUND(public.fn_calc_header_pressure(par_pressure))::INTEGER;
         temp_delta := ROUND(public.fn_calc_header_temperature(par_temperature))::INTEGER;
 
-        -- Форматирование давления (БББ)
         IF pressure_delta < 0 THEN
             pressure_str := '5' || LPAD(ABS(pressure_delta)::TEXT, 2, '0');
         ELSE
             pressure_str := LPAD(pressure_delta::TEXT, 3, '0');
         END IF;
 
-        -- Форматирование температуры (ТТ)
         IF temp_delta < 0 THEN
             temp_str := '5' || ABS(temp_delta)::TEXT;
         ELSE
             temp_str := LPAD(temp_delta::TEXT, 2, '0');
         END IF;
 
-        -- Возвращаем форматированную строку
         RETURN pressure_str || temp_str;
     END;
     $$;
@@ -612,7 +582,6 @@ BEGIN;
     RAISE NOTICE 'Функция fn_format_meteo_header создана успешно';
 COMMIT;
 
--- 5.8 Функция для проверки входных параметров измерений
 BEGIN;
     RAISE NOTICE 'Создание функции проверки входных параметров измерений...';
 
@@ -633,10 +602,8 @@ BEGIN;
         max_val NUMERIC;
         param_name TEXT;
     BEGIN
-        -- Проверка всех параметров в цикле для уменьшения дублирования кода
         FOREACH param_name IN ARRAY ARRAY['height', 'temperature', 'pressure', 'wind_direction', 'wind_speed', 'bullet_demolition_range']
         LOOP
-            -- Получаем значение параметра через EXECUTE
             EXECUTE format('SELECT %L::NUMERIC',
                 CASE
                     WHEN param_name = 'height' THEN par_height
@@ -647,22 +614,18 @@ BEGIN;
                     WHEN param_name = 'bullet_demolition_range' THEN par_bullet_demolition_range
                 END) INTO min_val;
 
-            -- Получаем минимальное и максимальное значение для проверки
             EXECUTE format('SELECT value::NUMERIC FROM public.measurment_settings WHERE key = %L',
                           'min_' || param_name) INTO min_val;
             EXECUTE format('SELECT value::NUMERIC FROM public.measurment_settings WHERE key = %L',
                           'max_' || param_name) INTO max_val;
 
-            -- Получаем текущее значение параметра
             EXECUTE format('SELECT %I', 'par_' || param_name) INTO var_result;
 
-            -- Проверяем диапазон и выбрасываем исключение при необходимости
             IF var_result < min_val OR var_result > max_val THEN
                 RAISE EXCEPTION '% % не укладывается в диапазон [%, %]',
                     INITCAP(param_name), var_result, min_val, max_val;
             END IF;
 
-            -- Записываем значение в соответствующее поле результата
             EXECUTE format('var_result.%I := %L::NUMERIC', param_name, var_result);
         END LOOP;
 
@@ -677,7 +640,6 @@ BEGIN;
     COMMENT ON FUNCTION public.fn_check_input_params(NUMERIC(8,2), NUMERIC(8,2), NUMERIC(8,2), NUMERIC(8,2), NUMERIC(8,2), NUMERIC(8,2))
         IS 'Проверяет входные параметры измерений на соответствие диапазонам';
 
-    -- Перегрузка функции для работы с типом input_params
     CREATE OR REPLACE FUNCTION public.fn_check_input_params(
         par_param public.input_params
     )
@@ -702,7 +664,6 @@ BEGIN;
     RAISE NOTICE 'Функция fn_check_input_params создана успешно';
 COMMIT;
 
--- 5.9 Функция для расчета отклонения температуры по высоте
 BEGIN;
     RAISE NOTICE 'Создание функции для расчета отклонения температуры по высоте...';
 
@@ -717,12 +678,10 @@ BEGIN;
         closest_height INTEGER;
         col_name TEXT;
     BEGIN
-        -- Проверка входных параметров
         IF p_height IS NULL OR p_value IS NULL THEN
             RAISE EXCEPTION 'Высота и значение не могут быть NULL';
         END IF;
 
-        -- Находим ближайшую доступную высоту
         SELECT height INTO closest_height
         FROM public.temperature_deviations
         ORDER BY ABS(height - p_height) ASC
@@ -732,7 +691,6 @@ BEGIN;
             RAISE EXCEPTION 'Не найдены данные о температурных отклонениях для высоты %', p_height;
         END IF;
 
-        -- Определяем имя столбца для значения
         IF p_value BETWEEN 1 AND 10 THEN
             col_name := 'dev_' || p_value;
         ELSIF p_value IN (20, 30, 40, 50) THEN
@@ -741,19 +699,17 @@ BEGIN;
             RAISE EXCEPTION 'Значение % должно быть в диапазоне 1-10 или одним из: 20, 30, 40, 50', p_value;
         END IF;
 
-        -- Возвращаем значение отклонения
         RETURN (SELECT public.temperature_deviations.*::public.temperature_deviations ->> col_name
                 FROM public.temperature_deviations
                 WHERE height = closest_height)::NUMERIC;
     END;
-    $$;
+    $;
 
     COMMENT ON FUNCTION public.get_deviation_value IS 'Получает значение отклонения температуры для заданной высоты и значения';
 
     RAISE NOTICE 'Функция get_deviation_value создана успешно';
 COMMIT;
 
--- 5.10 Функция для расчета температурного отклонения
 BEGIN;
     RAISE NOTICE 'Создание функции для расчета температурного отклонения...';
 
@@ -763,7 +719,7 @@ BEGIN;
     )
     RETURNS NUMERIC[]
     LANGUAGE PLPGSQL
-    AS $$
+    AS $
     DECLARE
         v_tens INTEGER;
         v_ones INTEGER;
@@ -771,16 +727,13 @@ BEGIN;
         v_dev_ones NUMERIC;
         v_result NUMERIC;
     BEGIN
-        -- Проверка параметров
         IF p_height IS NULL OR p_temperature IS NULL THEN
             RAISE EXCEPTION 'Высота и температура не могут быть NULL';
         END IF;
 
-        -- Разбиваем температуру на десятки и единицы
         v_tens := TRUNC(ABS(p_temperature) / 10) * 10;
         v_ones := ROUND(ABS(p_temperature) - v_tens);
 
-        -- Получаем отклонения для десятков и единиц
         v_dev_tens := public.get_deviation_value(p_height,
                         CASE WHEN v_tens = 0 THEN 1 ELSE v_tens END);
 
@@ -790,25 +743,21 @@ BEGIN;
             v_dev_ones := 0;
         END IF;
 
-        -- Суммируем отклонения
         v_result := v_dev_tens + v_dev_ones;
 
-        -- Корректируем для отрицательных температур
         IF p_temperature < 0 THEN
             v_result := ABS(v_result) + 50;
         END IF;
 
-        -- Возвращаем массив с промежуточными значениями для отладки
         RETURN ARRAY[v_tens, v_ones, v_dev_tens, v_dev_ones, v_result];
     END;
-    $$;
+    $;
 
     COMMENT ON FUNCTION public.calculate_temperature_deviation IS 'Рассчитывает отклонение температуры по высоте';
 
     RAISE NOTICE 'Функция calculate_temperature_deviation создана успешно';
 COMMIT;
 
--- 5.11 Функция для полного расчета метео приближенного
 BEGIN;
     RAISE NOTICE 'Создание функции для полного расчета метео приближенного...';
 
@@ -817,7 +766,7 @@ BEGIN;
     )
     RETURNS TEXT
     LANGUAGE PLPGSQL
-    AS $$
+    AS $
     DECLARE
         var_result TEXT;
         var_params public.input_params;
@@ -825,7 +774,6 @@ BEGIN;
         var_height TEXT;
         var_pressure_temp TEXT;
     BEGIN
-        -- Проверяем входные параметры
         BEGIN
             var_params := public.fn_check_input_params(par_params);
         EXCEPTION
@@ -833,65 +781,59 @@ BEGIN;
                 RAISE EXCEPTION 'Ошибка при проверке параметров: %', SQLERRM;
         END;
 
-        -- Получаем компоненты для формирования сводки
         var_period := public.fn_calc_header_period(NOW());
         var_height := public.fn_calc_header_height(ROUND(var_params.height)::INTEGER);
         var_pressure_temp := public.fn_format_meteo_header(var_params.pressure, var_params.temperature);
 
-        -- Формируем полную строку метеосводки
         var_result := var_period || var_height || var_pressure_temp;
 
         RETURN var_result;
     END;
-    $$;
+    $;
 
     COMMENT ON FUNCTION public.fn_calc_header_meteo_avg IS 'Формирует полную строку метеосводки';
 
     RAISE NOTICE 'Функция fn_calc_header_meteo_avg создана успешно';
 COMMIT;
 
--- 5.12 Функции для генерации тестовых данных
 BEGIN;
     RAISE NOTICE 'Создание функций для генерации тестовых данных...';
 
-    -- Функция для генерации случайной даты
     CREATE OR REPLACE FUNCTION public.fn_get_random_timestamp(
         par_min_value TIMESTAMP,
         par_max_value TIMESTAMP
     )
     RETURNS TIMESTAMP
     LANGUAGE PLPGSQL
-    AS $$
+    AS $
     BEGIN
         RETURN par_min_value + RANDOM() * (par_max_value - par_min_value);
     END;
-    $$;
+    $;
 
     COMMENT ON FUNCTION public.fn_get_random_timestamp IS 'Генерирует случайную дату в заданном диапазоне';
 
-    -- Функция для генерации случайного целого числа
     CREATE OR REPLACE FUNCTION public.fn_get_randon_integer(
         par_min_value INTEGER,
         par_max_value INTEGER
     )
     RETURNS INTEGER
     LANGUAGE PLPGSQL
-    AS $$
+    AS $
     BEGIN
         RETURN FLOOR((par_max_value + 1 - par_min_value) * RANDOM())::INTEGER + par_min_value;
     END;
-    $$;
+    $;
 
     COMMENT ON FUNCTION public.fn_get_randon_integer IS 'Генерирует случайное целое число в заданном диапазоне';
 
-    -- Функция для генерации случайного текста
     CREATE OR REPLACE FUNCTION public.fn_get_random_text(
         par_length INTEGER,
         par_list_of_chars TEXT DEFAULT 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_0123456789'
     )
     RETURNS TEXT
     LANGUAGE PLPGSQL
-    AS $$
+    AS $
     DECLARE
         var_len_of_list INTEGER := LENGTH(par_list_of_chars);
         var_position INTEGER;
@@ -905,20 +847,17 @@ BEGIN;
 
         RETURN var_result;
     END;
-    $$;
+    $;
 
     COMMENT ON FUNCTION public.fn_get_random_text IS 'Генерирует случайный текст заданной длины';
 
     RAISE NOTICE 'Функции для генерации тестовых данных созданы успешно';
 COMMIT;
 
--- 6. ГЕНЕРАЦИЯ ТЕСТОВЫХ ДАННЫХ
--- ======================================================================
-
 BEGIN;
     RAISE NOTICE 'Генерация тестовых данных...';
 
-    DO $$
+    DO $
     DECLARE
         var_position INTEGER;
         var_emploee_ids INTEGER[] := ARRAY[]::INTEGER[];
@@ -931,12 +870,10 @@ BEGIN;
         var_measure_type_id INTEGER;
         var_measure_input_data_id INTEGER;
     BEGIN
-        -- Определяем диапазон званий
         SELECT MIN(id), MAX(id)
         INTO var_min_rank, var_max_rank
         FROM public.military_ranks;
 
-        -- Создаем тестовых пользователей
         FOR var_position IN 1..var_emploee_quantity LOOP
             INSERT INTO public.employees(
                 name,
@@ -955,7 +892,6 @@ BEGIN;
 
         RAISE NOTICE 'Сформированы тестовые пользователи: %', var_emploee_ids;
 
-        -- Создаем измерения для каждого пользователя
         FOREACH var_current_emploee_id IN ARRAY var_emploee_ids LOOP
             FOR var_index IN 1..100 LOOP
                 var_measure_type_id := public.fn_get_randon_integer(1, 2);
@@ -993,14 +929,12 @@ BEGIN;
 
         RAISE NOTICE 'Набор тестовых данных сформирован успешно';
     END;
-    $$;
+    $;
 
     RAISE NOTICE 'Тестовые данные сгенерированы успешно';
 COMMIT;
 
--- 7. ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ
-
-DO $$
+DO $
 DECLARE
     var_pressure_value NUMERIC(8,2) := 0;
     var_temperature_value NUMERIC(8,2) := 0;
@@ -1011,18 +945,15 @@ BEGIN
     RAISE NOTICE 'Примеры использования функций';
     RAISE NOTICE '====================================';
 
-    -- Пример расчета метео приближенный
     var_pressure_value := public.fn_calc_header_pressure(743);
     var_temperature_value := public.fn_calc_header_temperature(23);
 
     RAISE NOTICE 'Отклонение давления: %', var_pressure_value;
     RAISE NOTICE 'Отклонение температуры: %', var_temperature_value;
 
-    -- Пример форматирования метеосводки
     RAISE NOTICE 'Форматированные параметры давления и температуры: %',
         public.fn_format_meteo_header(743, 23);
 
-    -- Пример полного расчета метеосводки
     var_input_params.height := 340;
     var_input_params.temperature := 23;
     var_input_params.pressure := 743;
@@ -1034,48 +965,68 @@ BEGIN
     RAISE NOTICE 'Полная метеосводка: %', var_meteo_string;
     RAISE NOTICE '====================================';
 END;
-$$;
--- 8. ЗАПРОСЫ ДЛЯ ФОРМИРОВАНИЯ ОТЧЕТОВ
--- ======================================================================
+$;
 
--- 8.1 Отчет по сотрудникам с информацией об измерениях
-WITH settings AS (
-    SELECT
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_height') AS min_height,
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_height') AS max_height,
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_temperature') AS min_temperature,
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_temperature') AS max_temperature,
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_pressure') AS min_pressure,
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_pressure') AS max_pressure,
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_wind_direction') AS min_wind_direction,
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_wind_direction') AS max_wind_direction,
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_wind_speed') AS min_wind_speed,
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_wind_speed') AS max_wind_speed,
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_bullet_demolition_range') AS min_bullet_demolition_range,
-        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_bullet_demolition_range') AS max_bullet_demolition_range
+CREATE OR REPLACE FUNCTION public.fn_get_wind_group(
+    par_wind_speed NUMERIC(8,2)
 )
-SELECT
-    e.name AS "ФИО",
-    mr.description AS "Должность",
-    COUNT(mb.id) AS "Кол-во измерений",
-    SUM(
-        CASE WHEN
-            mip.height < s.min_height OR mip.height > s.max_height OR
-            mip.temperature < s.min_temperature OR mip.temperature > s.max_temperature OR
-            mip.pressure < s.min_pressure OR mip.pressure > s.max_pressure OR
-            mip.wind_direction < s.min_wind_direction OR mip.wind_direction > s.max_wind_direction OR
-            mip.wind_speed < s.min_wind_speed OR mip.wind_speed > s.max_wind_speed OR
-            (mip.bullet_demolition_range IS NOT NULL AND
-             (mip.bullet_demolition_range < s.min_bullet_demolition_range OR
-              mip.bullet_demolition_range > s.max_bullet_demolition_range))
-        THEN 1 ELSE 0 END
-    ) AS "Количество ошибочных данных"
-FROM public.employees e
-JOIN public.military_ranks mr ON e.military_rank_id = mr.id
-JOIN public.measurment_baths mb ON e.id = mb.emploee_id
-JOIN public.measurment_input_params mip ON mb.measurment_input_param_id = mip.id
-CROSS JOIN settings s
-GROUP BY e.id, e.name, mr.description
-ORDER BY "Количество ошибочных данных" DESC;
+RETURNS TEXT
+LANGUAGE PLPGSQL
+AS $
+DECLARE
+    result TEXT;
+BEGIN
+    IF par_wind_speed IS NULL THEN
+        RAISE EXCEPTION 'Скорость ветра не может быть NULL';
+    END IF;
+
+    IF par_wind_speed BETWEEN 0 AND 5 THEN
+        result := 'correction_0_5';
+    ELSIF par_wind_speed BETWEEN 6 AND 10 THEN
+        result := 'correction_6_10';
+    ELSIF par_wind_speed BETWEEN 11 AND 15 THEN
+        result := 'correction_11_15';
+    ELSIF par_wind_speed BETWEEN 16 AND 20 THEN
+        result := 'correction_16_20';
+    ELSIF par_wind_speed BETWEEN 21 AND 25 THEN
+        result := 'correction_21_25';
+    ELSE
+        RAISE EXCEPTION 'Скорость ветра % вне допустимого диапазона (0-25 м/с)', par_wind_speed;
+    END IF;
+
+    RETURN result;
 END;
-$$;
+$;
+
+COMMENT ON FUNCTION public.fn_get_wind_group IS 'Определяет группу скорости ветра для получения соответствующей поправки';
+
+CREATE OR REPLACE FUNCTION public.fn_get_wind_correction(
+    par_height INTEGER,
+    par_wind_speed NUMERIC(8,2)
+)
+RETURNS NUMERIC(8,2)
+LANGUAGE PLPGSQL
+AS $
+DECLARE
+    nearest_height INTEGER;
+    correction_column TEXT;
+    result NUMERIC(8,2);
+BEGIN
+    SELECT height INTO nearest_height
+    FROM public.wind_corrections
+    ORDER BY ABS(height - par_height) ASC
+    LIMIT 1;
+
+    IF nearest_height IS NULL THEN
+        RAISE EXCEPTION 'Не найдены данные о ветровых поправках для высоты %', par_height;
+    END IF;
+
+    correction_column := public.fn_get_wind_group(par_wind_speed);
+
+    EXECUTE format('SELECT %I FROM public.wind_corrections WHERE height = $1', correction_column)
+    INTO result
+    USING nearest_height;
+
+    RETURN result;
+END;
+$;
