@@ -1034,4 +1034,49 @@ BEGIN
     RAISE NOTICE 'Полная метеосводка: %', var_meteo_string;
     RAISE NOTICE '====================================';
 END;
+
+$$;
+-- 8. ЗАПРОСЫ ДЛЯ ФОРМИРОВАНИЯ ОТЧЕТОВ
+-- ======================================================================
+
+-- 8.1 Отчет по сотрудникам с информацией об измерениях
+WITH settings AS (
+    SELECT
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_height') AS min_height,
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_height') AS max_height,
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_temperature') AS min_temperature,
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_temperature') AS max_temperature,
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_pressure') AS min_pressure,
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_pressure') AS max_pressure,
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_wind_direction') AS min_wind_direction,
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_wind_direction') AS max_wind_direction,
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_wind_speed') AS min_wind_speed,
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_wind_speed') AS max_wind_speed,
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'min_bullet_demolition_range') AS min_bullet_demolition_range,
+        (SELECT value::numeric FROM public.measurment_settings WHERE key = 'max_bullet_demolition_range') AS max_bullet_demolition_range
+)
+SELECT
+    e.name AS "ФИО",
+    mr.description AS "Должность",
+    COUNT(mb.id) AS "Кол-во измерений",
+    SUM(
+        CASE WHEN
+            mip.height < s.min_height OR mip.height > s.max_height OR
+            mip.temperature < s.min_temperature OR mip.temperature > s.max_temperature OR
+            mip.pressure < s.min_pressure OR mip.pressure > s.max_pressure OR
+            mip.wind_direction < s.min_wind_direction OR mip.wind_direction > s.max_wind_direction OR
+            mip.wind_speed < s.min_wind_speed OR mip.wind_speed > s.max_wind_speed OR
+            (mip.bullet_demolition_range IS NOT NULL AND
+             (mip.bullet_demolition_range < s.min_bullet_demolition_range OR
+              mip.bullet_demolition_range > s.max_bullet_demolition_range))
+        THEN 1 ELSE 0 END
+    ) AS "Количество ошибочных данных"
+FROM public.employees e
+JOIN public.military_ranks mr ON e.military_rank_id = mr.id
+JOIN public.measurment_baths mb ON e.id = mb.emploee_id
+JOIN public.measurment_input_params mip ON mb.measurment_input_param_id = mip.id
+CROSS JOIN settings s
+GROUP BY e.id, e.name, mr.description
+ORDER BY "Количество ошибочных данных" DESC;
+END;
 $$;
