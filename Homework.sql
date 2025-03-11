@@ -1158,6 +1158,14 @@ BEGIN;
 
     CREATE INDEX IF NOT EXISTS idx_wind_corrections_height_range
     ON public.wind_corrections (height, wind_range_id);
+=======
+    RAISE NOTICE 'Полная метеосводка: %', var_meteo_string;
+    RAISE NOTICE '====================================';
+END;
+
+$$;
+-- 8. ЗАПРОСЫ ДЛЯ ФОРМИРОВАНИЯ ОТЧЕТОВ
+-- ======================================================================
 
     CREATE INDEX IF NOT EXISTS idx_wind_speed_ranges_speed
     ON public.wind_speed_ranges (min_speed, max_speed);
